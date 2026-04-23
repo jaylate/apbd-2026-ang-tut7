@@ -16,12 +16,13 @@ public class UpdateAppointmentRequestDto
     public DateTime AppointmentDate { get; set; }
 
     [Required]
+    [MaxLength(30)]
     public string Status { get; set; } = string.Empty;
 
     [Required]
     [MaxLength(250)]
     public string Reason { get; set; } = string.Empty;
 
-    [MaxLength(1000)]
+    [MaxLength(500)]
     public string? InternalNotes { get; set; }
 }

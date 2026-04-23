@@ -53,4 +53,26 @@ public class AppointmentsController(IAppointmentService service)
             return Conflict(ex.Message);
         }
     }
+
+    [HttpPut("{idAppointment:int}")]
+    public async Task<IActionResult> Update([FromRoute] int idAppointment, [FromBody] UpdateAppointmentRequestDto dto)
+    {
+        try
+        {
+            await service.Update(idAppointment, dto);
+            return Ok();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(ex.Message);
+        }
+    }
 }

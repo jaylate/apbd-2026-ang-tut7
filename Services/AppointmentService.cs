@@ -171,4 +171,112 @@ public class AppointmentService : IAppointmentService
             return Convert.ToInt32(result);
         }
     }
+
+    public async Task Update(int id, UpdateAppointmentRequestDto dto)
+    {
+        using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+
+        string getAppointment = """
+            SELECT IdAppointment, Status, AppointmentDate FROM dbo.Appointments
+            WHERE IdAppointment = @IdAppointment;
+        """;
+        string? currentStatus = null;
+        DateTime? currentDate = null;
+        using (var command = new SqlCommand(getAppointment, connection))
+        {
+            command.Parameters.AddWithValue("@IdAppointment", id);
+            await using var reader = await command.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+            {
+                throw new KeyNotFoundException("Appointment not found.");
+            }
+            currentStatus = reader.GetString(1);
+            currentDate = reader.GetDateTime(2);
+        }
+
+        if (currentStatus == "Completed" && dto.AppointmentDate != currentDate)
+        {
+            throw new InvalidOperationException("Cannot change date of a completed appointment.");
+        }
+
+        string checkPatient = """
+            SELECT COUNT(1) FROM dbo.Patients
+            WHERE IdPatient = @IdPatient AND IsActive = 1;
+        """;
+        using (var command = new SqlCommand(checkPatient, connection))
+        {
+            command.Parameters.AddWithValue("@IdPatient", dto.IdPatient);
+            var patientExists = (int)(await command.ExecuteScalarAsync() ?? 0);
+            if (patientExists == 0)
+            {
+                throw new ArgumentException("Patient does not exist or is not active.");
+            }
+        }
+
+        string checkDoctor = """
+            SELECT COUNT(1) FROM dbo.Doctors
+            WHERE IdDoctor = @IdDoctor AND IsActive = 1;
+        """;
+        using (var command = new SqlCommand(checkDoctor, connection))
+        {
+            command.Parameters.AddWithValue("@IdDoctor", dto.IdDoctor);
+            var doctorExists = (int)(await command.ExecuteScalarAsync() ?? 0);
+            if (doctorExists == 0)
+            {
+                throw new ArgumentException("Doctor does not exist or is not active.");
+            }
+        }
+
+        var validStatuses = new[] { "Scheduled", "Completed", "Cancelled" };
+        if (!validStatuses.Contains(dto.Status))
+        {
+            throw new ArgumentException("Status must be one of: Scheduled, Completed, Cancelled.");
+        }
+
+        if (dto.AppointmentDate != currentDate)
+        {
+            string checkConflict = """
+                SELECT COUNT(1) FROM dbo.Appointments
+                WHERE IdDoctor = @IdDoctor
+                AND AppointmentDate = @AppointmentDate
+                AND Status = 'Scheduled'
+                AND IdAppointment != @IdAppointment;
+            """;
+            using (var command = new SqlCommand(checkConflict, connection))
+            {
+                command.Parameters.AddWithValue("@IdDoctor", dto.IdDoctor);
+                command.Parameters.AddWithValue("@AppointmentDate", dto.AppointmentDate);
+                command.Parameters.AddWithValue("@IdAppointment", id);
+                var conflictExists = (int)(await command.ExecuteScalarAsync() ?? 0);
+                if (conflictExists > 0)
+                {
+                    throw new InvalidOperationException("Doctor already has a scheduled appointment at this time.");
+                }
+            }
+        }
+
+        string updateQuery = """
+            UPDATE dbo.Appointments
+            SET IdPatient = @IdPatient,
+                IdDoctor = @IdDoctor,
+                AppointmentDate = @AppointmentDate,
+                Status = @Status,
+                Reason = @Reason,
+                InternalNotes = @InternalNotes
+            WHERE IdAppointment = @IdAppointment;
+        """;
+        using (var command = new SqlCommand(updateQuery, connection))
+        {
+            command.Parameters.AddWithValue("@IdAppointment", id);
+            command.Parameters.AddWithValue("@IdPatient", dto.IdPatient);
+            command.Parameters.AddWithValue("@IdDoctor", dto.IdDoctor);
+            command.Parameters.AddWithValue("@AppointmentDate", dto.AppointmentDate);
+            command.Parameters.AddWithValue("@Status", dto.Status);
+            command.Parameters.AddWithValue("@Reason", dto.Reason);
+            command.Parameters.AddWithValue("@InternalNotes", (object?)dto.InternalNotes ?? DBNull.Value);
+
+            await command.ExecuteNonQueryAsync();
+        }
+    }
 }
