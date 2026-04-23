@@ -14,4 +14,14 @@ public class AppointmentsController(IAppointmentService service)
         var appointments = await service.GetAll(status, patientLastName);
         return Ok(appointments);
     }
+
+    [HttpGet("{idAppointment:int}")]
+    public async Task<IActionResult> GetById([FromRoute] int idAppointment)
+    {
+        var appointment = await service.GetById(idAppointment);
+
+        return appointment is null
+            ? NotFound("No such appointment")
+            : Ok(appointment);
+    }
 }

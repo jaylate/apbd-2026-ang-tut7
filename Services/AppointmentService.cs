@@ -20,8 +20,6 @@ public class AppointmentService : IAppointmentService
             )
     {
         using var connection = new SqlConnection(_connectionString);
-        await connection.OpenAsync();
-
 
         string query = """
 			SELECT
@@ -41,6 +39,7 @@ public class AppointmentService : IAppointmentService
         command.Parameters.AddWithValue("@Status", (object?)status ?? DBNull.Value);
         command.Parameters.AddWithValue("@PatientLastName", (object?)patientLastName ?? DBNull.Value);
 
+        await connection.OpenAsync();
         using var reader = await command.ExecuteReaderAsync();
 
         var results = new List<AppointmentListDto>();
@@ -59,5 +58,50 @@ public class AppointmentService : IAppointmentService
         }
 
         return results;
+    }
+
+    public async Task<AppointmentDetailsDto?> GetById(int idAppointment)
+    {
+        using var connection = new SqlConnection(_connectionString);
+
+        string query = """
+			SELECT
+			a.IdAppointment,
+			a.AppointmentDate,
+			a.Status,
+			a.Reason,
+			a.InternalNotes,
+			a.CreatedAt,
+			p.FirstName + N' ' + p.LastName AS PatientFullName,
+			p.Email AS PatientEmail,
+			p.PhoneNumber AS PatientPhone,
+			d.LicenseNumber AS DoctorLicenseNumber
+			FROM dbo.Appointments a
+			JOIN dbo.Patients p ON p.IdPatient = a.IdPatient
+			JOIN dbo.Doctors d ON d.IdDoctor = a.IdDoctor
+			WHERE a.IdAppointment = @IdAppointment;
+		""";
+
+        using var command = new SqlCommand(query, connection);
+        command.Parameters.AddWithValue("@IdAppointment", idAppointment);
+
+        await connection.OpenAsync();
+        await using var reader = await command.ExecuteReaderAsync();
+
+        return await reader.ReadAsync() ?
+            new AppointmentDetailsDto
+            {
+                IdAppointment = reader.GetInt32(0),
+                AppointmentDate = reader.GetDateTime(1),
+                Status = reader.GetString(2),
+                Reason = reader.GetString(3),
+                InternalNotes = reader.IsDBNull(4) ? null : reader.GetString(4),
+                RecordCreationDate = reader.IsDBNull(5) ? null : reader.GetDateTime(5),
+                PatientFullName = reader.GetString(6),
+                PatientEmail = reader.GetString(7),
+                PatientPhone = reader.IsDBNull(8) ? null : reader.GetString(8),
+                DoctorLicenseNumber = reader.IsDBNull(9) ? null : reader.GetString(9)
+            }
+            : null;
     }
 }

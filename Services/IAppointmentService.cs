@@ -8,4 +8,5 @@ public interface IAppointmentService
             string? status,
             string? patientLastName
             );
+    Task<AppointmentDetailsDto?> GetById(int id);
 }
