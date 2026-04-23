@@ -279,4 +279,39 @@ public class AppointmentService : IAppointmentService
             await command.ExecuteNonQueryAsync();
         }
     }
+
+    public async Task Delete(int id)
+    {
+        using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+
+        string getAppointment = """
+            SELECT Status FROM dbo.Appointments
+            WHERE IdAppointment = @IdAppointment;
+        """;
+        using (var command = new SqlCommand(getAppointment, connection))
+        {
+            command.Parameters.AddWithValue("@IdAppointment", id);
+            await using var reader = await command.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+            {
+                throw new KeyNotFoundException("Appointment not found.");
+            }
+            var status = reader.GetString(0);
+            if (status == "Completed")
+            {
+                throw new InvalidOperationException("Cannot delete a completed appointment.");
+            }
+        }
+
+        string deleteQuery = """
+            DELETE FROM dbo.Appointments
+            WHERE IdAppointment = @IdAppointment;
+        """;
+        using (var command = new SqlCommand(deleteQuery, connection))
+        {
+            command.Parameters.AddWithValue("@IdAppointment", id);
+            await command.ExecuteNonQueryAsync();
+        }
+    }
 }

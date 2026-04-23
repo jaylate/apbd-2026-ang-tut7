@@ -75,4 +75,22 @@ public class AppointmentsController(IAppointmentService service)
             return Conflict(ex.Message);
         }
     }
+
+    [HttpDelete("{idAppointment:int}")]
+    public async Task<IActionResult> Delete([FromRoute] int idAppointment)
+    {
+        try
+        {
+            await service.Delete(idAppointment);
+            return NoContent();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(ex.Message);
+        }
+    }
 }
