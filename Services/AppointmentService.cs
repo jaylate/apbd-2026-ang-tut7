@@ -104,4 +104,71 @@ public class AppointmentService : IAppointmentService
             }
             : null;
     }
+
+    public async Task<int> Create(CreateAppointmentRequestDto dto)
+    {
+        using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+
+        string checkPatient = """
+            SELECT COUNT(1) FROM dbo.Patients
+            WHERE IdPatient = @IdPatient AND IsActive = 1;
+        """;
+        using (var command = new SqlCommand(checkPatient, connection))
+        {
+            command.Parameters.AddWithValue("@IdPatient", dto.IdPatient);
+            var patientExists = (int)(await command.ExecuteScalarAsync() ?? 0);
+            if (patientExists == 0)
+            {
+                throw new ArgumentException("Patient does not exist or is not active.");
+            }
+        }
+
+        string checkDoctor = """
+            SELECT COUNT(1) FROM dbo.Doctors
+            WHERE IdDoctor = @IdDoctor AND IsActive = 1;
+        """;
+        using (var command = new SqlCommand(checkDoctor, connection))
+        {
+            command.Parameters.AddWithValue("@IdDoctor", dto.IdDoctor);
+            var doctorExists = (int)(await command.ExecuteScalarAsync() ?? 0);
+            if (doctorExists == 0)
+            {
+                throw new ArgumentException("Doctor does not exist or is not active.");
+            }
+        }
+
+        string checkConflict = """
+            SELECT COUNT(1) FROM dbo.Appointments
+            WHERE IdDoctor = @IdDoctor
+            AND AppointmentDate = @AppointmentDate
+            AND Status = 'Scheduled';
+        """;
+        using (var command = new SqlCommand(checkConflict, connection))
+        {
+            command.Parameters.AddWithValue("@IdDoctor", dto.IdDoctor);
+            command.Parameters.AddWithValue("@AppointmentDate", dto.AppointmentDate);
+            var conflictExists = (int)(await command.ExecuteScalarAsync() ?? 0);
+            if (conflictExists > 0)
+            {
+                throw new InvalidOperationException("Doctor already has a scheduled appointment at this time.");
+            }
+        }
+
+        string insertQuery = """
+            INSERT INTO dbo.Appointments (IdPatient, IdDoctor, AppointmentDate, Status, Reason)
+            VALUES (@IdPatient, @IdDoctor, @AppointmentDate, 'Scheduled', @Reason);
+            SELECT CAST(SCOPE_IDENTITY() AS INT);
+        """;
+        using (var command = new SqlCommand(insertQuery, connection))
+        {
+            command.Parameters.AddWithValue("@IdPatient", dto.IdPatient);
+            command.Parameters.AddWithValue("@IdDoctor", dto.IdDoctor);
+            command.Parameters.AddWithValue("@AppointmentDate", dto.AppointmentDate);
+            command.Parameters.AddWithValue("@Reason", dto.Reason);
+
+            var result = await command.ExecuteScalarAsync();
+            return Convert.ToInt32(result);
+        }
+    }
 }

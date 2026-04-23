@@ -9,4 +9,5 @@ public interface IAppointmentService
             string? patientLastName
             );
     Task<AppointmentDetailsDto?> GetById(int id);
+    Task<int> Create(CreateAppointmentRequestDto dto);
 }
